@@ -1,0 +1,162 @@
+#include <EasyNextionLibrary.h>
+#include <trigger.h>
+//#include "NexSlider.h"
+//#include "NexTouch.h"
+//#include "NexHardware.h"
+EasyNex myNex(Serial);
+
+
+#include <DHT.h>
+
+#define DHTPIN A4      // переименовываем 3 пин в  DHTPIN
+#define DHTTYPE DHT11  // указываем тип датчика
+DHT dht(DHTPIN, DHTTYPE);
+const int ledPin1 = 9;
+const int ledPin2 = 10;
+bool water_up = 0;
+bool water_dn = 0;
+byte hold = 9;
+byte hot = 10;
+byte raczak = 255;
+unsigned long nextChangeTime = 0;  // Время следующего изменения яркости
+unsigned long stepDuration;        // Длительность одного шага в мс
+int brightness = 255;              // Текущая яркость (начинаем с максимума — 255)
+
+
+void setup() {
+  Serial.begin(9600);  //открыть порт на скорости 9600
+  dht.begin();         // запустить библиотеку
+  //pinMode(ledPin1, OUTPUT);   // свет
+  pinMode(A0, OUTPUT);  // вентелятор
+  pinMode(A1, OUTPUT);
+  pinMode(12, INPUT_PULLUP);       // датчик воды верх
+  pinMode(13, INPUT_PULLUP);       // датчик воды низ
+  pinMode(ledPin1, INPUT_PULLUP);  // теплый свет
+  pinMode(ledPin2, INPUT_PULLUP);  //холодный свет
+}
+
+void loop() {
+  myNex.NextionListen();
+}
+
+void trigger0() {
+  float h = dht.readHumidity();     // считать показания датчика влажности
+  float t = dht.readTemperature();  // считать показания датчика температуры
+  myNex.writeNum("va0.val", h * 10);
+  myNex.writeNum("va1.val", t * 10);
+}
+
+void trigger1() {
+  water_up = digitalRead(12);
+  water_dn = digitalRead(13);
+  //myNex.writeStr("t5.txt", "No water");
+  if (water_up == 1 && water_dn == 1) {
+    //Serial.println("нет воды");
+    myNex.writeStr("t9.txt", "4");
+  }
+
+  if (water_up == 0 && water_dn == 0) {
+    //Serial.println("полный бак");
+    myNex.writeStr("t9.txt", "2");
+  }
+
+
+  if (water_up == 1 && water_dn == 0) {
+    //Serial.println("есть вода");
+    myNex.writeStr("t9.txt", "1");
+  }
+
+  if (water_up == 0 && water_dn == 1) {
+    //Serial.println("ошибка датчиков воды");
+    myNex.writeStr("t9.txt", "3");
+  }
+}
+
+//Свет ВКЛ
+void trigger2() {
+  analogWrite(hold, 255);  //включить гарячий холодный свет без юэзби
+  analogWrite(hot, 255);   //включить гарячий холодный свет без юэзби
+}
+//Свет ВЫКЛ
+void trigger3() {
+  analogWrite(hold, 0);  //вкыл гарячий холодный свет без юэзби
+  analogWrite(hot, 0);   //вкыл гарячий холодный свет без юэзби
+}
+//включить вент
+void trigger4() {
+  digitalWrite(A0, 1);
+}
+//выкл вент
+void trigger5() {
+  digitalWrite(A0, 0);
+}
+
+//Устанавливаем яркость  светодиодов
+void trigger7() {
+  delay(10);
+  byte number_9 = myNex.readNumber("lamps.n1.val");  //теплые
+  analogWrite(ledPin1, number_9);
+  byte number_10 = myNex.readNumber("lamps.n0.val");  //холодные
+  analogWrite(ledPin2, number_10);
+}
+//вкл большого вент
+void trigger8() {
+  digitalWrite(A1, 1);  
+}
+
+void trigger9() {
+  digitalWrite(A1, 0);  
+}
+
+
+
+void triggerA() {                                     // расвет
+  byte number_9 = myNex.readNumber("lamps.n1.val");   //теплые
+  byte number_10 = myNex.readNumber("lamps.n0.val");  //холодные
+  byte raczak = myNex.readNumber("raczak.n5.val");    //длительность расвета и заката
+  unsigned long currentTime = millis();               // Текущее время в мс с момента запуска
+
+  // Проверяем, наступило ли время для следующего изменения яркости
+  if (currentTime >= nextChangeTime) {
+    // Обновляем время следующего изменения
+    nextChangeTime = currentTime + stepDuration;
+
+    // Увеличиваем яркость на 1 шаг
+    brightness++;
+
+    // Если достигли максимальной яркости (255), останавливаемся
+    if (brightness >= 255) {
+      brightness = 255;  // Фиксируем яркость на максимуме
+      // Больше не меняем яркость — лампа остаётся на максимальной яркости
+    }
+
+    // Устанавливаем новую яркость для обеих ламп одновременно
+    analogWrite(ledPin1, brightness);
+    analogWrite(ledPin2, brightness);
+  }
+}
+void triggerB() {                                     // закат
+  byte number_9 = myNex.readNumber("lamps.n1.val");   //теплые
+  byte number_10 = myNex.readNumber("lamps.n0.val");  //холодные
+  byte raczak = myNex.readNumber("raczak.n5.val");    //длительность расвета и заката
+  unsigned long currentTime = millis();               // Текущее время в мс с момента запуска
+
+  // Проверяем, наступило ли время для следующего изменения яркости
+  if (currentTime >= nextChangeTime) {
+    // Обновляем время следующего изменения
+    nextChangeTime = currentTime + stepDuration;
+
+    // Уменьшаем яркость на 1 шаг
+    brightness--;
+
+    // Если достигли минимальной яркости (0), останавливаемся
+    if (brightness <= 0) {
+      brightness = 0;  // Фиксируем яркость на минимуме
+      // Больше не меняем яркость — лампа остаётся выключенной
+    }
+
+    // Устанавливаем новую яркость для обеих ламп одновременно
+    analogWrite(ledPin1, brightness);
+    analogWrite(ledPin2, brightness);
+  }
+}
